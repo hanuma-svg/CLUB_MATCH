@@ -167,13 +167,13 @@ export default async function HomePage() {
                 Get Started
               </Link>
             </div>
-
+{/* Database status message hidden for production UI 
             {!data.dbConnected && (
               <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
                 <strong>Database setup pending:</strong> Configure <code>DATABASE_URL</code> in{" "}
                 <code>.env</code>, run Prisma migrations &amp; seed to populate live clubs and events.
               </div>
-            )}
+            )} */}
           </div>
 
           <HeroVisual />
