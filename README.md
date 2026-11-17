@@ -51,7 +51,7 @@ See full architecture & ER diagrams in [`docs/ACADEMIC_DOCUMENTATION.md`](docs/A
 
 ### Step 1: Clone & Install Dependencies
 ```bash
-git clone <your-repo-url>
+git clone <https://github.com/hanuma-svg/CLUB_MATCH>
 cd clubmatch
 npm install
 ```
