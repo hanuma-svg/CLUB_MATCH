@@ -1,0 +1,344 @@
+// ClubMatch Prisma Schema — PostgreSQL + pgvector
+// Normalized relational schema (3NF) with vector(768) columns for semantic recommendations
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  CLUB_COORDINATOR
+  ADMIN
+}
+
+enum ClubCategory {
+  TECHNICAL
+  NON_TECHNICAL
+  CULTURAL
+  RESEARCH_CENTER
+}
+
+enum ClubStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  REJECTED
+}
+
+enum InterestCategory {
+  TECHNOLOGY
+  CREATIVE
+  CULTURAL
+  OTHER
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  CANCELLED
+  ATTENDED
+}
+
+model UserAccount {
+  userId       String   @id @default(cuid()) @map("user_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  role         UserRole @default(STUDENT)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  student         Student?
+  clubCoordinator ClubCoordinator?
+  admin           Admin?
+  activities      ResourceActivity[]
+
+  @@index([email])
+  @@index([role])
+  @@map("user_accounts")
+}
+
+model Student {
+  studentId           String                       @id @default(cuid()) @map("student_id")
+  userId              String                       @unique @map("user_id")
+  email               String                       @unique
+  srn                 String?                      @unique
+  department          String?
+  semester            Int?
+  campus              String                       @default("PES University EC Campus")
+  bio                 String?
+  onboardingCompleted Boolean                      @default(false) @map("onboarding_completed")
+  interestEmbedding   Unsupported("vector(768)")?  @map("interest_embedding")
+  embeddingModel      String?                      @map("embedding_model")
+  embeddingUpdatedAt  DateTime?                    @map("embedding_updated_at")
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
+
+  user          UserAccount         @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  interests     StudentInterest[]
+  registrations EventRegistration[]
+  memberships   ClubMembership[]
+  bookmarks     BookmarkedClub[]
+
+  @@index([email])
+  @@index([campus])
+  @@map("students")
+}
+
+model Admin {
+  adminId     String   @id @default(cuid()) @map("admin_id")
+  userId      String   @unique @map("user_id")
+  email       String   @unique
+  designation String   @default("Platform Administrator")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user                   UserAccount                 @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  managedClubs           Club[]
+  coordinatorAssignments ClubCoordinatorAssignment[]
+
+  @@index([email])
+  @@map("admins")
+}
+
+model ClubCoordinator {
+  coordinatorId String   @id @default(cuid()) @map("coordinator_id")
+  userId        String   @unique @map("user_id")
+  email         String   @unique
+  department    String?
+  phone         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user        UserAccount                 @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  assignments ClubCoordinatorAssignment[]
+
+  @@index([email])
+  @@map("club_coordinators")
+}
+
+model Club {
+  clubId                  String                       @id @default(cuid()) @map("club_id")
+  slug                    String                       @unique
+  name                    String                       @unique
+  category                ClubCategory
+  campus                  String                       @default("PES University EC Campus")
+  tagline                 String?
+  description             String
+  activities              String
+  logoUrl                 String?                      @map("logo_url")
+  bannerUrl               String?                      @map("banner_url")
+  isSampleDescription     Boolean                      @default(true) @map("is_sample_description")
+  verifiedCoordinatorName String?                      @map("verified_coordinator_name")
+  verifiedEmail           String?                      @map("verified_email")
+  verifiedSocialLinks     Json?                        @map("verified_social_links")
+  status                  ClubStatus                   @default(ACTIVE)
+  isFeatured              Boolean                      @default(false) @map("is_featured")
+  memberCount             Int                          @default(0) @map("member_count")
+  adminId                 String?                      @map("admin_id")
+  embedding               Unsupported("vector(768)")?
+  embeddingText           String?                      @map("embedding_text")
+  embeddingModel          String?                      @map("embedding_model")
+  embeddingUpdatedAt      DateTime?                    @map("embedding_updated_at")
+  createdAt               DateTime                     @default(now()) @map("created_at")
+  updatedAt               DateTime                     @updatedAt @map("updated_at")
+
+  admin                  Admin?                      @relation(fields: [adminId], references: [adminId], onDelete: SetNull)
+  interests              ClubInterest[]
+  events                 Event[]
+  memberships            ClubMembership[]
+  bookmarks              BookmarkedClub[]
+  coordinatorAssignments ClubCoordinatorAssignment[]
+
+  @@index([name])
+  @@index([category])
+  @@index([campus])
+  @@index([status])
+  @@index([isFeatured])
+  @@map("clubs")
+}
+
+model EventCategory {
+  categoryId  String   @id @default(cuid()) @map("category_id")
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  events Event[]
+
+  @@map("event_categories")
+}
+
+model Event {
+  eventId              String                       @id @default(cuid()) @map("event_id")
+  slug                 String                       @unique
+  title                String
+  description          String
+  bannerUrl            String?                      @map("banner_url")
+  clubId               String                       @map("club_id")
+  categoryId           String                       @map("category_id")
+  eventDate            DateTime                     @map("event_date")
+  startTime            String                       @map("start_time")
+  endTime              String                       @map("end_time")
+  venue                String
+  registrationDeadline DateTime                     @map("registration_deadline")
+  maxCapacity          Int                          @map("max_capacity")
+  currentRegistrations Int                          @default(0) @map("current_registrations")
+  status               EventStatus                  @default(UPCOMING)
+  isFeatured           Boolean                      @default(false) @map("is_featured")
+  isSampleEvent        Boolean                      @default(false) @map("is_sample_event")
+  embedding            Unsupported("vector(768)")?
+  embeddingText        String?                      @map("embedding_text")
+  embeddingModel       String?                      @map("embedding_model")
+  embeddingUpdatedAt   DateTime?                    @map("embedding_updated_at")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+
+  club          Club                @relation(fields: [clubId], references: [clubId], onDelete: Cascade)
+  category      EventCategory       @relation(fields: [categoryId], references: [categoryId], onDelete: Restrict)
+  registrations EventRegistration[]
+
+  @@index([clubId])
+  @@index([categoryId])
+  @@index([eventDate])
+  @@index([status])
+  @@index([isFeatured])
+  @@map("events")
+}
+
+model Interest {
+  interestId  String           @id @default(cuid()) @map("interest_id")
+  name        String           @unique @map("interest_name")
+  slug        String           @unique
+  category    InterestCategory
+  description String?
+  iconName    String?          @map("icon_name")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  students StudentInterest[]
+  clubs    ClubInterest[]
+
+  @@index([category])
+  @@map("interests")
+}
+
+model StudentInterest {
+  studentId  String   @map("student_id")
+  interestId String   @map("interest_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  student  Student  @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [interestId], onDelete: Cascade)
+
+  @@id([studentId, interestId])
+  @@index([interestId])
+  @@map("student_interests")
+}
+
+model ClubInterest {
+  clubId     String   @map("club_id")
+  interestId String   @map("interest_id")
+  weight     Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  club     Club     @relation(fields: [clubId], references: [clubId], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [interestId], onDelete: Cascade)
+
+  @@id([clubId, interestId])
+  @@index([interestId])
+  @@map("club_interests")
+}
+
+model EventRegistration {
+  registrationId String             @id @default(cuid()) @map("registration_id")
+  studentId      String             @map("student_id")
+  eventId        String             @map("event_id")
+  status         RegistrationStatus @default(REGISTERED)
+  notes          String?
+  registeredAt   DateTime           @default(now()) @map("registered_at")
+  cancelledAt    DateTime?          @map("cancelled_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  event   Event   @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+
+  @@unique([studentId, eventId])
+  @@index([studentId, status])
+  @@index([eventId, status])
+  @@map("event_registrations")
+}
+
+model ClubMembership {
+  studentId String   @map("student_id")
+  clubId    String   @map("club_id")
+  role      String   @default("Member")
+  status    String   @default("ACTIVE")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  student Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  club    Club    @relation(fields: [clubId], references: [clubId], onDelete: Cascade)
+
+  @@id([studentId, clubId])
+  @@index([clubId])
+  @@map("club_memberships")
+}
+
+model BookmarkedClub {
+  studentId String   @map("student_id")
+  clubId    String   @map("club_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [studentId], onDelete: Cascade)
+  club    Club    @relation(fields: [clubId], references: [clubId], onDelete: Cascade)
+
+  @@id([studentId, clubId])
+  @@index([clubId])
+  @@map("bookmarked_clubs")
+}
+
+model ClubCoordinatorAssignment {
+  coordinatorId     String   @map("coordinator_id")
+  clubId            String   @map("club_id")
+  assignedByAdminId String?  @map("assigned_by_admin_id")
+  title             String   @default("Club Coordinator")
+  assignedAt        DateTime @default(now()) @map("assigned_at")
+
+  coordinator     ClubCoordinator @relation(fields: [coordinatorId], references: [coordinatorId], onDelete: Cascade)
+  club            Club            @relation(fields: [clubId], references: [clubId], onDelete: Cascade)
+  assignedByAdmin Admin?          @relation(fields: [assignedByAdminId], references: [adminId], onDelete: SetNull)
+
+  @@id([coordinatorId, clubId])
+  @@index([clubId])
+  @@map("club_coordinator_assignments")
+}
+
+model ResourceActivity {
+  activityId  String   @id @default(cuid()) @map("activity_id")
+  actorUserId String?  @map("actor_user_id")
+  actorRole   String   @map("actor_role")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  summary     String
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor UserAccount? @relation(fields: [actorUserId], references: [userId], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("resource_activities")
+}
